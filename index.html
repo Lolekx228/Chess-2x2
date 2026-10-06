@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Шахматы 2×2</title>
+<style>
+:root{
+  --bg:#101217;--panel:#191d25;--panel2:#222733;--text:#f2f4f8;--muted:#9ca5b5;
+  --light:#e8d8b5;--dark:#9b7650;--accent:#6ea8ff;--good:#68d391;--danger:#ff6b6b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#242a38,#0d0f14 65%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;min-height:100vh}
+.wrap{width:min(1180px,96vw);margin:0 auto;padding:24px 0 35px}
+header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
+h1{margin:0;font-size:30px}
+.sub{color:var(--muted);font-size:14px;margin-top:3px}
+button{border:0;border-radius:10px;padding:10px 15px;background:var(--panel2);color:var(--text);font-weight:700;cursor:pointer}
+button:hover{filter:brightness(1.15)}
+.layout{display:grid;grid-template-columns:minmax(420px,760px) 300px;gap:20px;align-items:start}
+.boardShell{background:var(--panel);padding:14px;border-radius:18px;box-shadow:0 18px 55px #0007}
+.board{width:min(760px,88vw);aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);overflow:hidden;border-radius:10px}
+.sq{position:relative;display:flex;align-items:center;justify-content:center;font-size:clamp(38px,7.8vw,76px);user-select:none;cursor:pointer}
+.sq.light{background:var(--light)}.sq.dark{background:var(--dark)}
+.sq.selected{box-shadow:inset 0 0 0 5px #ffe16b}
+.sq.legal:after{content:"";width:20%;height:20%;border-radius:50%;background:#2229;position:absolute}
+.sq.capture:after{content:"";position:absolute;inset:7%;border:5px solid #ffcf4a;border-radius:50%}
+.sq.last{filter:brightness(1.10)}
+.coord{position:absolute;font-size:11px;font-weight:800;opacity:.65;bottom:3px;right:5px;z-index:2}
+.piece{position:relative;z-index:3;line-height:1;font-weight:900;transform:scale(1.10);filter:drop-shadow(0 4px 2px #0008)}
+.white{color:#fff;text-shadow:-1px -1px 0 #111,1px -1px 0 #111,-1px 1px 0 #111,1px 1px 0 #111,0 3px 4px #000b}
+.black{color:#111;text-shadow:-1px -1px 0 #d7dbe3,1px -1px 0 #d7dbe3,-1px 1px 0 #d7dbe3,1px 1px 0 #d7dbe3,0 3px 4px #000b}
+.ownerA{outline:2px solid #66a3ff;outline-offset:-3px}.ownerB{outline:2px solid #c084fc;outline-offset:-3px}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid #ffffff0b;border-radius:15px;padding:15px}
+.turn{font-size:18px;font-weight:800}.turn small{display:block;color:var(--muted);font-size:12px;font-weight:500;margin-top:4px}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.player{padding:10px;border-radius:10px;background:var(--panel2);border-left:4px solid transparent}
+.player.active{border-left-color:var(--good);background:#273229}
+.player b{display:block}.player span{font-size:12px;color:var(--muted)}
+.log{height:250px;overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6;color:#cbd3e1}
+.rules{color:#c0c7d3;font-size:13px;line-height:1.55}
+.rules b{color:#fff}
+.status{padding:10px;border-radius:10px;background:#202630;font-size:13px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.board{width:94vw}.side{display:grid;grid-template-columns:1fr 1fr}.card:first-child{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>♟ Шахматы 2×2</h1><div class="sub">Две команды • четыре игрока • фигуры принадлежат своей половине</div></div>
+  <button id="newGame">Новая партия</button>
+</header>
+
+<div class="layout">
+  <div class="boardShell"><div id="board" class="board"></div></div>
+  <aside class="side">
+    <div class="card">
+      <div id="turn" class="turn"></div>
+      <div id="status" class="status" style="margin-top:10px"></div>
+      <div class="players">
+        <div id="p0" class="player"><b>⚪ Белые A</b><span>a–d</span></div>
+        <div id="p1" class="player"><b>⚫ Чёрные A</b><span>a–d</span></div>
+        <div id="p2" class="player"><b>⚪ Белые B</b><span>e–h</span></div>
+        <div id="p3" class="player"><b>⚫ Чёрные B</b><span>e–h</span></div>
+      </div>
+    </div>
+    <div class="card"><b>Ходы</b><div id="log" class="log"></div></div>
+    <div class="card rules">
+      <b>Правила режима</b><br>
+      • Белые A → Чёрные A → Белые B → Чёрные B.<br>
+      • В текущей половине <b>a–d</b> фигурами управляет игрок A, в <b>e–h</b> — игрок B.<br>
+      • Перейдя через границу <b>d|e</b>, фигура автоматически становится управляемой другим игроком.<br>
+      • Поэтому напарник может получить твою фигуру, если она перешла на его половину.<br>
+      • Обычные шахматные правила: шах, мат, рокировка, взятие на проходе и превращение пешки.
+    </div>
+  </aside>
+</div>
+</div>
+
+<script>
+const boardEl=document.getElementById('board'), turnEl=document.getElementById('turn'), statusEl=document.getElementById('status'), logEl=document.getElementById('log');
+const files=['a','b','c','d','e','f','g','h'];
+const chars={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
+let board,turn=0,selected=null,legal=[],lastMove=null,gameOver=false,enPassant=null,castle={w:{k:true,q:true},b:{k:true,q:true}},history=[];
+
+function empty(){return Array.from({length:8},()=>Array(8).fill(null))}
+function makePiece(c,t,owner){return {c,t,owner}}
+function reset(){
+ board=empty(); turn=0;selected=null;legal=[];lastMove=null;gameOver=false;enPassant=null;
+ castle={w:{k:true,q:true},b:{k:true,q:true}};history=[];
+ const back=['r','n','b','q','k','b','n','r'];
+ for(let x=0;x<8;x++){board[0][x]=makePiece('b',back[x],x<4?1:3);board[1][x]=makePiece('b','p',x<4?1:3);board[6][x]=makePiece('w','p',x<4?0:2);board[7][x]=makePiece('w',back[x],x<4?0:2)}
+ render(); addLog('Новая партия началась.'); update();
+}
+function clone(b){return b.map(r=>r.map(p=>p?{...p}:null))}
+function inside(y,x){return y>=0&&y<8&&x>=0&&x<8}
+function sq(y,x){return files[x]+(8-y)}
+function ownerSide(t){return t%2===0?'w':'b'}
+function ownerName(t){return ['Белые A','Чёрные A','Белые B','Чёрные B'][t]}
+function playerForPiece(p){return p.owner}
+function enemy(c){return c==='w'?'b':'w'}
+
+function pseudoMoves(y,x,b=board, includeCastle=true){
+ const p=b[y][x]; if(!p)return [];
+ const out=[]; const add=(yy,xx,extra={})=>{if(!inside(yy,xx))return false; if(!b[yy][xx]){out.push({y:yy,x:xx,...extra});return true} if(b[yy][xx].c!==p.c)out.push({y:yy,x:xx,capture:true,...extra});return false};
+ if(p.t==='p'){
+   const d=p.c==='w'?-1:1, start=p.c==='w'?6:1;
+   if(inside(y+d,x)&&!b[y+d][x]){out.push({y:y+d,x});if(y===start&&!b[y+2*d][x])out.push({y:y+2*d,x})}
+   for(const dx of [-1,1])if(inside(y+d,x+dx)){
+     const q=b[y+d][x+dx]; if(q&&q.c!==p.c)out.push({y:y+d,x:x+dx,capture:true});
+     if(enPassant&&enPassant.y===y+d&&enPassant.x===x+dx)out.push({y:y+d,x:x+dx,enpassant:true,capture:true});
+   }
+ } else if(p.t==='n'){
+   for(const [dy,dx] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]])add(y+dy,x+dx);
+ } else if(['b','r','q'].includes(p.t)){
+   const dirs=[];
+   if(['b','q'].includes(p.t))dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+   if(['r','q'].includes(p.t))dirs.push([-1,0],[1,0],[0,-1],[0,1]);
+   for(const [dy,dx] of dirs){let yy=y+dy,xx=x+dx;while(inside(yy,xx)){if(!add(yy,xx))break;yy+=dy;xx+=dx}}
+ } else if(p.t==='k'){
+   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(dy||dx)add(y+dy,x+dx);
+   if(includeCastle){
+     const row=p.c==='w'?7:0;
+     if(y===row&&x===4&&!isInCheck(p.c,b)){
+       if(castle[p.c].k&&!b[row][5]&&!b[row][6]&&b[row][7]?.t==='r'&&b[row][7].c===p.c&&!isAttacked(row,5,enemy(p.c),b)&&!isAttacked(row,6,enemy(p.c),b))out.push({y:row,x:6,castle:'k'});
+       if(castle[p.c].q&&!b[row][1]&&!b[row][2]&&!b[row][3]&&b[row][0]?.t==='r'&&b[row][0].c===p.c&&!isAttacked(row,3,enemy(p.c),b)&&!isAttacked(row,2,enemy(p.c),b))out.push({y:row,x:2,castle:'q'});
+     }
+   }
+ }
+ return out;
+}
+function isAttacked(y,x,by,b){
+ for(let yy=0;yy<8;yy++)for(let xx=0;xx<8;xx++){
+   const p=b[yy][xx]; if(!p||p.c!==by)continue;
+   if(p.t==='p'){const d=by==='w'?-1:1;if(yy+d===y&&Math.abs(xx-x)===1)return true}
+   else if(p.t==='k'){if(Math.max(Math.abs(yy-y),Math.abs(xx-x))===1)return true}
+   else {
+     const moves=pseudoMoves(yy,xx,b,false);
+     if(moves.some(m=>m.y===y&&m.x===x))return true;
+   }
+ }
+ return false;
+}
+function kingPos(c,b){for(let y=0;y<8;y++)for(let x=0;x<8;x++)if(b[y][x]?.c===c&&b[y][x].t==='k')return [y,x];return null}
+function isInCheck(c,b=board){const k=kingPos(c,b);return k?isAttacked(k[0],k[1],enemy(c),b):true}
+function applyTemp(y,x,m,b){
+ const p=b[y][x]; b[m.y][m.x]=p;b[y][x]=null;
+ p.owner = m.x < 4 ? (p.c === 'w' ? 0 : 1) : (p.c === 'w' ? 2 : 3);
+ if(m.enpassant)b[y][m.x]=null;
+ if(m.castle){const row=y;if(m.x===6){b[row][5]=b[row][7];b[row][7]=null}else{b[row][3]=b[row][0];b[row][0]=null}}
+}
+function legalMoves(y,x){
+ const p=board[y][x];if(!p)return[];
+ return pseudoMoves(y,x).filter(m=>{
+   const b=clone(board);applyTemp(y,x,m,b);return !isInCheck(p.c,b)
+ });
+}
+function allLegal(c,b=board){
+ let n=0;for(let y=0;y<8;y++)for(let x=0;x<8;x++){if(b[y][x]?.c!==c)continue;for(const m of pseudoMoves(y,x,b)) {const bb=clone(b);applyTemp(y,x,m,bb);if(!isInCheck(c,bb))n++}}return n
+}
+function render(){
+ boardEl.innerHTML='';
+ for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+   const el=document.createElement('div');el.className='sq '+((x+y)%2?'dark':'light');
+   if(lastMove&&((lastMove.from.y===y&&lastMove.from.x===x)||(lastMove.to.y===y&&lastMove.to.x===x)))el.classList.add('last');
+   if(selected&&selected.y===y&&selected.x===x)el.classList.add('selected');
+   const lm=legal.find(m=>m.y===y&&m.x===x);if(lm)el.classList.add(lm.capture?'capture':'legal');
+   const p=board[y][x];if(p){const sp=document.createElement('span');sp.className='piece '+(p.c==='w'?'white':'black');sp.textContent=chars[p.c][p.t];el.appendChild(sp);if(currentOwner(y,x)===0||currentOwner(y,x)===1)el.classList.add('ownerA');else el.classList.add('ownerB')}
+   if(y===7){const c=document.createElement('span');c.className='coord';c.textContent=files[x];el.appendChild(c)}
+   if(x===0){const c=document.createElement('span');c.className='coord';c.style.left='4px';c.style.right='auto';c.style.top='3px';c.textContent=8-y;el.appendChild(c)}
+   el.onclick=()=>clickSquare(y,x);boardEl.appendChild(el)
+ }
+}
+function currentOwner(y,x){
+  // a-d belong to A, e-h belong to B; color determines the team.
+  // 0 = White A, 1 = Black A, 2 = White B, 3 = Black B.
+  const half = x < 4 ? 0 : 1;
+  return board[y][x]?.c === 'w' ? (half === 0 ? 0 : 2) : (half === 0 ? 1 : 3);
+}
+function clickSquare(y,x){
+ if(gameOver)return;
+ const p=board[y][x];
+ if(selected){
+   const m=legal.find(z=>z.y===y&&z.x===x);
+   if(m){move(selected.y,selected.x,m);return}
+ }
+ if(p&&currentOwner(y,x)===turn){selected={y,x};legal=legalMoves(y,x);render()}
+ else {selected=null;legal=[];render()}
+}
+function promote(p){
+ let ans=prompt('Превращение пешки: Q — ферзь, R — ладья, B — слон, N — конь','Q')||'Q';
+ ans=ans.toLowerCase();if(!['q','r','b','n'].includes(ans))ans='q';p.t=ans;
+}
+function move(y,x,m){
+ const p=board[y][x], from={y,x}, captured=board[m.y][m.x];
+ board[m.y][m.x]=p;board[y][x]=null;
+ p.owner = currentOwner(m.y,m.x);
+ if(m.enpassant)board[y][m.x]=null;
+ if(m.castle){if(m.x===6){board[y][5]=board[y][7];board[y][7]=null}else{board[y][3]=board[y][0];board[y][0]=null}}
+ if(p.t==='k'){castle[p.c].k=false;castle[p.c].q=false}
+ if(p.t==='r'){if(x===0)castle[p.c].q=false;if(x===7)castle[p.c].k=false}
+ if(captured?.t==='r'){if(m.x===0)castle[captured.c].q=false;if(m.x===7)castle[captured.c].k=false}
+ enPassant=null;
+ if(p.t==='p'&&Math.abs(m.y-y)===2)enPassant={y:(m.y+y)/2,x:m.x};
+ if(p.t==='p'&&(m.y===0||m.y===7))promote(p);
+ lastMove={from,to:{y:m.y,x:m.x}};
+ addLog(`${ownerName(turn)}: ${sq(y,x)} → ${sq(m.y,m.x)}${captured?' ×':''}${m.castle?' (рокировка)':''}`);
+ selected=null;legal=[];
+ turn=(turn+1)%4;
+ const c=ownerSide(turn);
+ if(allLegal(c)===0){
+   gameOver=true;
+   if(isInCheck(c)) {statusEl.textContent=`Мат! ${ownerName(turn)} получает мат. Победила команда ${c==='w'?'⚫ Чёрных':'⚪ Белых'}.`;addLog(statusEl.textContent)}
+   else {statusEl.textContent='Пат — ходов нет, партия завершена вничью.';addLog(statusEl.textContent)}
+ } else {
+   const check=isInCheck(c);statusEl.textContent=check?`⚠ Шах королю ${c==='w'?'белых':'чёрных'}!`:'Ход разрешён.';
+ }
+ render();update();
+}
+function addLog(s){history.push(s);logEl.innerHTML=history.map(x=>`<div>${x}</div>`).join('');logEl.scrollTop=logEl.scrollHeight}
+function update(){
+ turnEl.innerHTML=`Ход: ${ownerName(turn)}<small>Цвет: ${ownerSide(turn)==='w'?'белые':'чёрные'} • зона владельца: ${turn===0||turn===1?'a–d':'e–h'}</small>`;
+ for(let i=0;i<4;i++)document.getElementById('p'+i).classList.toggle('active',i===turn&&!gameOver);
+}
+document.getElementById('newGame').onclick=reset;
+reset();
+</script>
+</body>
+</html>
